@@ -206,75 +206,56 @@ for epoch in range(1, epochs+1):
     # ——— VALIDACIÓN ———
     model.eval()
     val_losses = []
+    all_preds = []
+    all_gts   = []
+
     with torch.no_grad():
         for i, (img_batch, lbl_batch) in enumerate(tqdm(mydataset_val)):
-            #img_batch = tools.to_cuda(img_batch.permute(1,0,4,2,3))
-            # 1) Quitamos la dimensión extra de tamaño 1
-            img_batch = img_batch.squeeze(2)   # pasa de [B, T, 1, C, H, W] a [B, T, C, H, W]
-    
-            # 2) Permutamos a (T, B, C, H, W) y movemos a CUDA
-            img_batch = tools.to_cuda(img_batch.permute(1, 0, 2, 3, 4))
+            # 1) Quitamos la dimensión extra y permutamos sólo una vez
+            img_batch = img_batch.squeeze(2)                           # [B,T,C,H,W]
+            img_batch = tools.to_cuda(img_batch.permute(1, 0, 2, 3, 4)) # [T,B,C,H,W]
+            lbl_batch = tools.to_cuda(lbl_batch)                       # [B,H,W]
 
-            lbl_batch = tools.to_cuda(lbl_batch)
-
+            # 2) Forward
             output, _, _ = model(img_batch.float())
 
-            # Ahora continúa igual:
-            output_conf, target_conf = tools.conf_m(output, lbl_batch)
-            confusion_matrix.add(output_conf, target_conf)
-            loss = criterion_ch(output, lbl_batch.long())
-            val_losses.append(loss.item())
-            lbl_batch = tools.to_cuda(lbl_batch)
-
-            output, _, _ = model(img_batch.float())
+            # 3) Loss y confusion
             output_conf, target_conf = tools.conf_m(output, lbl_batch)
             confusion_matrix.add(output_conf, target_conf)
             loss = criterion_ch(output, lbl_batch.long())
             val_losses.append(loss.item())
 
-        # tras terminar el for de mydataset_val, calcula métricas globales:
-        all_preds = []  # lista de vectores
-        all_gts   = []
-        
-        # Recorre otra vez o acumula dentro del bucle:
-        with torch.no_grad():
-            for i, (img_batch, lbl_batch) in enumerate(tqdm(mydataset_val)):
-                # (… tu código de forward y loss …)
-                output, _, _ = model(img_batch.float())
-                preds = output.data.max(1)[1].cpu().numpy().ravel()
-                gts   = lbl_batch.cpu().numpy().ravel()
-                all_preds.append(preds)
-                all_gts.append(gts)
-        
-        # concatenar
-        y_pred = np.concatenate(all_preds)
-        y_true = np.concatenate(all_gts)
-        
-        # calcular métricas
-        prec = precision_score(y_true, y_pred, zero_division=0)
-        rec  = recall_score(y_true, y_pred, zero_division=0)
-        f1   = f1_score(y_true, y_pred, zero_division=0)
-        iou  = jaccard_score(y_true, y_pred, zero_division=0)
-        
-        print(f'Epoch {epoch}  PREC: {prec:.3f}  REC: {rec:.3f}  F1: {f1:.3f}  IoU: {iou:.3f}')
+            # 4) Acumular preds y gts
+            preds = output.data.max(1)[1].cpu().numpy().ravel()
+            gts   = lbl_batch.cpu().numpy().ravel()
+            all_preds.append(preds)
+            all_gts.append(gts)
 
-        
-        # métricas de validación
-        val_acc = (np.trace(confusion_matrix.conf) / float(np.sum(confusion_matrix.conf))) * 100
-        print(f'Epoch {epoch} VAL_LOSS: {np.mean(val_losses):.3f}  VAL_ACC: {val_acc:.3f}')
-        confusion_matrix.reset()
+    # 5) Métricas agregadas
+    y_pred = np.concatenate(all_preds)
+    y_true = np.concatenate(all_gts)
+    prec = precision_score(y_true, y_pred, zero_division=0)
+    rec  = recall_score(y_true, y_pred, zero_division=0)
+    f1   = f1_score(y_true, y_pred, zero_division=0)
+    iou  = jaccard_score(y_true, y_pred, zero_division=0)
 
-    # 6) Guardar resultados
-    #tools.write_results(ff, save_folder, epoch,
-    #    train_acc, val_acc,
-    #    np.mean(train_losses), np.mean(val_losses))
+    # 6) Imprimir resumen
+    val_acc = (np.trace(confusion_matrix.conf) / float(np.sum(confusion_matrix.conf))) * 100
+    print(
+        f'Epoch {epoch} '
+        f'VAL_LOSS: {np.mean(val_losses):.3f}  '
+        f'VAL_ACC: {val_acc:.3f}%  '
+        f'P:{prec:.3f}  R:{rec:.3f}  F1:{f1:.3f}  IoU:{iou:.3f}'
+    )
+    confusion_matrix.reset()
 
+    # 7) Guardar resultados con las 4 métricas nuevas
     tools.write_results(
-    ff, save_folder, epoch,
-    train_acc, val_acc,
-    np.mean(train_losses), np.mean(val_losses),
-    prec, rec, f1, iou
+        ff, save_folder, epoch,
+        train_acc, val_acc,
+        np.mean(train_losses), np.mean(val_losses),
+        prec, rec, f1, iou
     )
 
-    # 7) Guardar modelo
+    # 8) Guardar modelo
     torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
