@@ -159,7 +159,7 @@ save_folder = os.path.join(args.base_save_dir, args.experiment_name)
 
 if os.path.exists(save_folder):
     shutil.rmtree(save_folder)
-os.mkdir(save_folder, exist_ok = True)
+os.mkdir(save_folder)
 
 ff = open(os.path.join(save_folder, 'progress.txt'), 'w')
 
