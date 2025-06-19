@@ -36,6 +36,8 @@ parser.add_argument('--patch_size', type=int, default=48,
     help='lado del parche (por ej. 48 para 48×48)')
 parser.add_argument('--nb_dates', type=int, default=2,
     help='número de fechas (always 2: before & after)')
+parser.add_argument('--epochs',   type=int, default=100,
+    help='Número de épocas de entrenamiento')
 args = parser.parse_args()
 
 
@@ -98,6 +100,7 @@ change_dataset_val = custom.MyDataset(
 
 patch_size = args.patch_size
 nb_dates = args.nb_dates
+epochs = args.epochs
 
 #change_dataset = custom.MyDataset(
 #     data_folder=data_root,
@@ -143,7 +146,6 @@ diff_tensor[1]= 0.96
 criterion_diff=tools.to_cuda(nn.CrossEntropyLoss(tools.to_cuda(diff_tensor)))
 
 confusion_matrix = tnt.meter.ConfusionMeter(2, normalized=True)
-epochs=30
 
 save_folder = 'models' #where to save the models and training progress
 if os.path.exists(save_folder):
