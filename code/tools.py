@@ -20,27 +20,39 @@ def conf_m(output, target_th):
   target_conf=(target_conf.contiguous()).view(target_conf.size(0)*target_conf.size(1)*target_conf.size(2))
   return output_conf, target_conf
 
-def write_results(ff, save_folder, epoch, train_acc, test_acc, change_acc, non_ch, train_losses, val_losses):
-    ff=open('./' + save_folder + '/progress.txt','a')
-    ff.write('train: ')
-    ff.write(str('%.3f' % train_acc))
-    ff.write(' ')
-    ff.write(' val: ')
-    ff.write(str('%.3f' % test_acc))
-    ff.write(' ')
-    ff.write(' CHANGE: ')
-    ff.write(str('%.3f' % change_acc))
-    ff.write(' ')
-    ff.write(' NON_CHANGE: ')
-    ff.write(str('%.3f' % non_ch))
-    ff.write(' ')
-    ff.write(' E: ')
-    ff.write(str(epoch))
-    ff.write('         ')
-    ff.write(' TRAIN_LOSS: ')
-    ff.write(str('%.3f' % train_losses))
-    ff.write(' VAL_LOSS: ')
-    ff.write(str('%.3f' % val_losses))
-    ff.write('\n')
+#def write_results(ff, save_folder, epoch, train_acc, test_acc, change_acc, non_ch, train_losses, val_losses):
+#    ff=open('./' + save_folder + '/progress.txt','a')
+#    ff.write('train: ')
+#    ff.write(str('%.3f' % train_acc))
+#    ff.write(' ')
+#    ff.write(' val: ')
+#    ff.write(str('%.3f' % test_acc))
+#    ff.write(' ')
+#    ff.write(' CHANGE: ')
+#    ff.write(str('%.3f' % change_acc))
+#    ff.write(' ')
+#    ff.write(' NON_CHANGE: ')
+#    ff.write(str('%.3f' % non_ch))
+#    ff.write(' ')
+#    ff.write(' E: ')
+#    ff.write(str(epoch))
+#    ff.write('         ')
+#    ff.write(' TRAIN_LOSS: ')
+#    ff.write(str('%.3f' % train_losses))
+#    ff.write(' VAL_LOSS: ')
+#    ff.write(str('%.3f' % val_losses))
+#    ff.write('\n')
 
-
+def write_results(ff, save_folder, epoch, train_acc, val_acc, train_loss, val_loss):
+    """
+    Escribe en el archivo progress.txt una línea con:
+      Epoch, train_acc, val_acc, train_loss, val_loss
+    """
+    # Ya abrimos 'ff' en main.py, así que solo usamos ese file handle
+    ff.write(
+        f"Epoch {epoch:02d}  "
+        f"train_acc: {train_acc:.3f}%  "
+        f"val_acc:   {val_acc:.3f}%  "
+        f"train_loss:{train_loss:.3f}  "
+        f"val_loss:  {val_loss:.3f}\n"
+    )
