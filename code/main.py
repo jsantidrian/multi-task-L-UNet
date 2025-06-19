@@ -16,6 +16,7 @@ import network
 import shutil
 import argparse
 from sklearn.metrics import precision_score, recall_score, f1_score, jaccard_score
+import random
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument('--Fsplit', type=str, default='/home/mariapap/DATA/SPACENET7/EXPS/__TRY_DIFFERENT__/Fsplit/',
@@ -52,8 +53,6 @@ args = parser.parse_args()
 
 #csv_file_train = args.xys + 'myxys_train.csv'
 #csv_file_val = args.xys + 'myxys_val.csv'
-
-import random
 
 # Obtenemos todos los IDs a partir de los archivos TIFF en before/
 before_paths = glob.glob(os.path.join(args.data_folder, 'before', '*.tif'))
