@@ -1,71 +1,117 @@
+import os
 import numpy as np
 import pandas as pd
 from skimage import io
 import torch
 import glob
 from torch.utils.data.dataset import Dataset
+import cv2
 
 class MyDataset(Dataset):
-    def __init__(self, csv_path, image_ids, patch_size, nb_dates):
+    def __init__(self, data_folder, site_ids, patch_size, nb_dates):
+        """
+        data_folder: ruta a la carpeta que contiene las subcarpetas before/, after/, mask/
+        site_ids:   lista de IDs (sin extensión) que definen cada ejemplo
+        patch_size: lado del parche (ej. 48)
+        nb_dates:   número de fechas (aquí siempre 2: before y after)
+        """
+        self.data_folder = data_folder
+        self.site_ids    = site_ids
+        self.patch_size  = patch_size
+        self.nb_dates    = nb_dates  # será 2
 
-        self.data_info = pd.read_csv(csv_path)
-
-        self.patch_size = patch_size
-        self.nb_dates = nb_dates
-
+        # Cargar imágenes (before + after)
         self.all_imgs = []
-        for fold in image_ids:
-            all_tifs = glob.glob(fold + '/images/*.tif*')
+        for sid in site_ids:
+            # construir rutas a before y after
+            p0 = os.path.join(data_folder, 'before', f'{sid}.tif')
+            p1 = os.path.join(data_folder, 'after',  f'{sid}.tif')
+            # buscamos el único TIFF whose name starts with "{sid}_"
+            p0_list = glob.glob(os.path.join(data_folder, 'before', f'{sid}_*.tif'))
+            p1_list = glob.glob(os.path.join(data_folder, 'after',  f'{sid}_*.tif'))
+            if not p0_list or not p1_list:
+                raise FileNotFoundError(f"Falta before/after para {sid}")
+            p0 = p0_list[0]
+            p1 = p1_list[0]
+            im0 = io.imread(p0)  # (H, W, 4)
+            im1 = io.imread(p1)  # (H, W, 4)
+            # apilamos en secuencia temporal
+            seq = np.stack([im0, im1], axis=0)  # (2, H, W, 4)
+            self.all_imgs.append(seq)
 
-            years = []
-            for j in range(len(all_tifs)):
-              ff = all_tifs[j].find('monthly_')
-              years.append(all_tifs[j][ff+8:ff+12] + all_tifs[j][ff+13:ff+15])
-            ind = np.argsort(years)
-            sort_tifs = [all_tifs[i] for i in ind]          
-            img = []
-
-            #create list with the multi-temporal images
-            #you can change the step in the for loop to adjust the number of dates you want to exploit
-            #Here, I have put a step=2 which creates a list with the first available date, the last available date and 8 intermediate (10 dates)
-            for nd in range(0, nb_dates-1, 2):    
-                im = io.imread(sort_tifs[nd])
-                img.append(im)
-            img.append( io.imread(sort_tifs[-1]) )
-            self.all_imgs.append(np.asarray(img))
-
-        #change groundtruth
+        # Cargar máscaras binarias
         self.all_labels = []
-        for fold in image_ids:
-            label = io.imread(fold + '/change/change.tif')
-            self.all_labels.append(label)
+        for sid in site_ids:
+            pm = os.path.join(data_folder, 'mask', f'{sid}_mask.tif')
+            pm_list = glob.glob(os.path.join(data_folder, 'mask', f'{sid}_*_mask.tif'))
+            if not pm_list:
+                raise FileNotFoundError(f"Falta mask para {sid}")
+            pm = pm_list[0]
+            mask = io.imread(pm)  # (H, W), valores 0/1
+            self.all_labels.append(mask)
 
-        #buildings groundtruth
-        self.all_buildings = []
-        for fold in image_ids:
-            buildings = []
-            buildings.append(io.imread(fold + '/buildings/buildings1.tif'))
-            buildings.append(io.imread(fold + '/buildings/buildings2.tif'))
-            self.all_buildings.append(np.array(buildings))
+        # número total de ejemplos
+        self.data_len = len(site_ids)
 
-        # Calculate len
-        self.data_len = self.data_info.shape[0]-1
+    #def __getitem__(self, index):
+        # secuencia de imágenes y máscara
+        #seq = self.all_imgs[index]      # (2, H, W, 4)
+        #lbl = self.all_labels[index]    # (H, W)
 
+        # normalizar imágenes a [0,1]
+        #seq = seq.astype(np.float32) / 255.0
+
+        # reordenar a (T, batch=1, C=4, H, W) para la red
+        # Primero (T, H, W, C) -> (T, C, H, W)
+        #seq = np.transpose(seq, (0, 3, 1, 2))
+        # luego agregamos dimensión batch=1 en el eje 1
+        #seq = np.expand_dims(seq, 1)
+
+        # converir a torch.Tensor
+        #seq_tensor = torch.from_numpy(seq)         # float32
+        #lbl_tensor = torch.from_numpy(lbl).long()  # int64
+
+        #return seq_tensor, lbl_tensor
+    
     def __getitem__(self, index):
-        x = int(self.data_info.iloc[:,0][index])
-        y = int(self.data_info.iloc[:,1][index])
-        image_id = int(self.data_info.iloc[:,2][index])
+       # secuencia de imágenes y máscara
+       seq = self.all_imgs[index]      # (2, H_orig, W_orig, 4)
+       lbl = self.all_labels[index]    # (H_orig, W_orig)
 
-        find_patch = self.all_imgs[image_id] [:, x:x + self.patch_size, y:y + self.patch_size, :]
-        find_patch = find_patch/255.0 #normalize patch
+       # ────────────────────────────────────────────────────────────
+       # Redimensionar cada fecha y la máscara a patch_size × patch_size
+       # ────────────────────────────────────────────────────────────
+       seq_resized = []
+       for t in range(seq.shape[0]):
+           img_t = seq[t]  # (H_orig, W_orig, 4)
+           # cv2.resize espera (W, H)
+           img_res = cv2.resize(
+               img_t,
+               (self.patch_size, self.patch_size),
+               interpolation=cv2.INTER_LINEAR
+           )
+           seq_resized.append(img_res)
+       seq = np.stack(seq_resized, axis=0)  # (2, patch_size, patch_size, 4)
 
-        find_labels = self.all_labels[image_id] [x:x + self.patch_size, y:y + self.patch_size]
+       # máscara: cerca‐más, sin interpolación de valores
+       lbl = cv2.resize(
+           lbl,
+           (self.patch_size, self.patch_size),
+           interpolation=cv2.INTER_NEAREST
+       )
+       # ────────────────────────────────────────────────────────────
 
-        find_builds = self.all_buildings[image_id] [:,x:x + self.patch_size, y:y + self.patch_size]
+       # normalizar imágenes a [0,1]
+       seq = seq.astype(np.float32) / 255.0
+       seq = np.transpose(seq, (0, 3, 1, 2))
+       seq = np.expand_dims(seq, 1)
 
-        return np.ascontiguousarray(find_patch), np.ascontiguousarray(find_labels), np.ascontiguousarray(find_builds)
+       # #converir a torch.Tensor
+       seq_tensor = torch.from_numpy(seq)         # float32
+       lbl_tensor = torch.from_numpy(lbl).long()  # int64
+
+       return seq_tensor, lbl_tensor
+
 
     def __len__(self):
         return self.data_len
-
-
