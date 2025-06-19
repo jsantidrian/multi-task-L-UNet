@@ -15,6 +15,7 @@ import cv2
 import network
 import shutil
 import argparse
+from sklearn.metrics import precision_score, recall_score, f1_score, jaccard_score
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument('--Fsplit', type=str, default='/home/mariapap/DATA/SPACENET7/EXPS/__TRY_DIFFERENT__/Fsplit/',
@@ -231,6 +232,33 @@ for epoch in range(1, epochs+1):
             loss = criterion_ch(output, lbl_batch.long())
             val_losses.append(loss.item())
 
+        # tras terminar el for de mydataset_val, calcula métricas globales:
+        all_preds = []  # lista de vectores
+        all_gts   = []
+        
+        # Recorre otra vez o acumula dentro del bucle:
+        with torch.no_grad():
+            for i, (img_batch, lbl_batch) in enumerate(tqdm(mydataset_val)):
+                # (… tu código de forward y loss …)
+                output, _, _ = model(img_batch.float())
+                preds = output.data.max(1)[1].cpu().numpy().ravel()
+                gts   = lbl_batch.cpu().numpy().ravel()
+                all_preds.append(preds)
+                all_gts.append(gts)
+        
+        # concatenar
+        y_pred = np.concatenate(all_preds)
+        y_true = np.concatenate(all_gts)
+        
+        # calcular métricas
+        prec = precision_score(y_true, y_pred, zero_division=0)
+        rec  = recall_score(y_true, y_pred, zero_division=0)
+        f1   = f1_score(y_true, y_pred, zero_division=0)
+        iou  = jaccard_score(y_true, y_pred, zero_division=0)
+        
+        print(f'Epoch {epoch}  PREC: {prec:.3f}  REC: {rec:.3f}  F1: {f1:.3f}  IoU: {iou:.3f}')
+
+        
         # métricas de validación
         val_acc = (np.trace(confusion_matrix.conf) / float(np.sum(confusion_matrix.conf))) * 100
         print(f'Epoch {epoch} VAL_LOSS: {np.mean(val_losses):.3f}  VAL_ACC: {val_acc:.3f}')
@@ -242,15 +270,11 @@ for epoch in range(1, epochs+1):
     #    np.mean(train_losses), np.mean(val_losses))
 
     tools.write_results(
-    ff,
-    save_folder,
-    epoch,
-    train_acc,
-    val_acc,
-    np.mean(train_losses),
-    np.mean(val_losses)
+    ff, save_folder, epoch,
+    train_acc, val_acc,
+    np.mean(train_losses), np.mean(val_losses),
+    prec, rec, f1, iou
     )
-
 
     # 7) Guardar modelo
     torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
