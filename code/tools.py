@@ -43,16 +43,13 @@ def conf_m(output, target_th):
 #    ff.write(str('%.3f' % val_losses))
 #    ff.write('\n')
 
-def write_results(ff, save_folder, epoch, train_acc, val_acc, train_loss, val_loss):
-    """
-    Escribe en el archivo progress.txt una línea con:
-      Epoch, train_acc, val_acc, train_loss, val_loss
-    """
-    # Ya abrimos 'ff' en main.py, así que solo usamos ese file handle
+
+def write_results(ff, save_folder, epoch,
+                  train_acc, val_acc, train_loss, val_loss,
+                  precision, recall, f1, iou):
     ff.write(
         f"Epoch {epoch:02d}  "
-        f"train_acc: {train_acc:.3f}%  "
-        f"val_acc:   {val_acc:.3f}%  "
-        f"train_loss:{train_loss:.3f}  "
-        f"val_loss:  {val_loss:.3f}\n"
+        f"train_acc:{train_acc:.3f}%  val_acc:{val_acc:.3f}%  "
+        f"train_loss:{train_loss:.3f}  val_loss:{val_loss:.3f}  "
+        f"P:{precision:.3f}  R:{recall:.3f}  F1:{f1:.3f}  IoU:{iou:.3f}\n"
     )
