@@ -149,7 +149,6 @@ criterion_diff=tools.to_cuda(nn.CrossEntropyLoss(tools.to_cuda(diff_tensor)))
 
 confusion_matrix = tnt.meter.ConfusionMeter(2, normalized=True)
 
-save_folder = 'models' #where to save the models and training progress
 if os.path.exists(save_folder):
     shutil.rmtree(save_folder)
 os.mkdir(save_folder)
