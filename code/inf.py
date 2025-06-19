@@ -1,122 +1,127 @@
-import glob
-import cv2
-from skimage import io
-import numpy as np
 import os
-from tqdm import tqdm
-import torch
-import torch.nn.functional as F
-import network
-import tools
+import glob
 import shutil
 import argparse
+import random
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--Fsplit', type=str, default='/home/mariapap/DATA/SPACENET7/EXPS/__TRY_DIFFERENT__/Fsplit/',
-                    help='path destination for Fsplit folder')
-parser.add_argument('--patch_size', type=int, default=256,
-                    help='dimensions of the patch size you wish to use')
-parser.add_argument('--step', type=int, default=128,
-                    help='step that will be used to extract the patches along the x y dimesnions')
-parser.add_argument('--saved_model', type=str, default='./models/model_7.pt',
-                    help='trained model you wish to use')
+import cv2
+import numpy as np
+from skimage import io
+import torch
+import torch.nn.functional as F
+from tqdm import tqdm
 
-
-args = parser.parse_args()
-
+import network
+import tools
 
 def sliding_window(IMAGE, patch_size, step):
-    prediction = np.zeros((IMAGE.shape[3], IMAGE.shape[4], 2))
-    count_image = np.zeros((IMAGE.shape[3], IMAGE.shape[4]))
-    x=0
-    while (x!=IMAGE.shape[3]):
-     y=0
-     while(y!=IMAGE.shape[4]):
+    """
+    IMAGE: numpy array de forma (T, 1, C, H, W)
+    Devuelve:
+      final_pred: (H, W) con etiquetas [0/1]
+      prob:       (2, H, W) con probabilidades normalizadas
+    """
+    _, _, _, H, W = IMAGE.shape
+    prediction = np.zeros((H, W, 2), dtype=np.float32)
+    count_image = np.zeros((H, W),    dtype=np.float32)
 
-               if (not y+patch_size > IMAGE.shape[4]) and (not x+patch_size > IMAGE.shape[3]):
-                patch = IMAGE[:, :, :, x:x + patch_size, y:y + patch_size]/255.0
+    x = 0
+    while x < H:
+        y = 0
+        while y < W:
+            if y + patch_size <= W and x + patch_size <= H:
+                patch = IMAGE[:, :, :, x:x+patch_size, y:y+patch_size] / 255.0
                 patch = tools.to_cuda(torch.from_numpy(patch).float())
-                output, segm1, segm2 = (model(patch))
-                output = F.log_softmax(output)
-                output = output.cpu().data.numpy().squeeze()
-                output = np.transpose(output, (1,2,0))
-                for i in range(0, patch_size):
-                    for j in range(0, patch_size):
-                        prediction[x+i, y+j] += (output[i,j,:])
-                        count_image[x+i, y+j] +=1
+                output, _, _ = model(patch)
+                output = F.log_softmax(output, dim=1).cpu().data.numpy().squeeze()  # (2, ph, pw)
+                output = np.transpose(output, (1, 2, 0))  # (ph, pw, 2)
 
-                stride=step
+                prediction[x:x+patch_size, y:y+patch_size] += output
+                count_image[x:x+patch_size, y:y+patch_size] += 1
 
-               if y + patch_size == IMAGE.shape[4]:
-                  break
+            if y + patch_size >= W:
+                break
+            y += step if (y + patch_size + step <= W) else W - patch_size
 
-               if y + patch_size > IMAGE.shape[4]:
-                y = IMAGE.shape[4] - patch_size
-               else:
-                y = y+stride
+        if x + patch_size >= H:
+            break
+        x += step if (x + patch_size + step <= H) else H - patch_size
 
-     if x + patch_size == IMAGE.shape[3]:
-        break
+    # Normalizar
+    for i in range(H):
+        for j in range(W):
+            if count_image[i, j] > 0:
+                prediction[i, j] /= count_image[i, j]
 
-     if x + patch_size > IMAGE.shape[3]:
-       x = IMAGE.shape[3] - patch_size
-     else:
-      x = x+stride
+    final_pred = np.argmax(prediction, axis=-1)           # (H, W)
+    prob       = np.transpose(prediction, (2, 0, 1))     # (2, H, W)
+    return final_pred, prob
 
-    final_pred = np.zeros((IMAGE.shape[3], IMAGE.shape[4]))
-    for i in range(0, final_pred.shape[0]):
-        for j in range(0, final_pred.shape[1]):
-            final_pred[i,j] = np.argmax(prediction[i,j]/float(count_image[i,j]))
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_folder', type=str,
+        default='/content/drive/MyDrive/U/14 semestre/Tesis MDS-DIM/Datos/data/data_20m_buffer',
+        help='Carpeta con before/, after/ y mask/')
+    parser.add_argument('--patch_size', type=int, default=48,
+        help='Tamaño del parche (ej. 48)')
+    parser.add_argument('--step', type=int, default=24,
+        help='Stride para sliding window (ej. patch_size/2)')
+    parser.add_argument('--saved_model', type=str, default='./models/model_30.pt',
+        help='Checkpoint entrenado para inferencia')
+    args = parser.parse_args()
 
-    for i in range(0, prediction.shape[0]):
-        for j in range(0, prediction.shape[1]):
-            prediction[i,j] = (prediction[i,j]/float(count_image[i,j]))
+    # ——— Construir split test usando la misma lógica que en main.py ———
+    before_paths = glob.glob(os.path.join(args.data_folder, 'before', '*.tif'))
+    after_paths  = glob.glob(os.path.join(args.data_folder, 'after',  '*.tif'))
+    mask_paths   = glob.glob(os.path.join(args.data_folder, 'mask',   '*_mask.tif'))
 
-    return final_pred, prediction
+    ids_before = {os.path.basename(p).split('_')[0] for p in before_paths}
+    ids_after  = {os.path.basename(p).split('_')[0] for p in after_paths}
+    ids_mask   = {os.path.basename(p).split('_')[0] for p in mask_paths}
 
-########
+    common_ids = sorted(ids_before & ids_after & ids_mask)
+    if not common_ids:
+        raise RuntimeError("No se encontraron ejemplos completos en before/after/mask")
+    random.shuffle(common_ids)
+    Ftest = common_ids[50:60]  # mismos índices que en main.py
 
-patch_size = args.patch_size
-step = args.step
-model = tools.to_cuda(network.U_Net(4,2,256))
-model.load_state_dict(torch.load('./models/model_7.pt'))
-model.eval()
+    # ——— Cargar modelo ———
+    global model
+    model = tools.to_cuda(network.U_Net(
+        img_ch=4,
+        output_ch=2,
+        patch_size=args.patch_size
+    ))
+    model.load_state_dict(torch.load(args.saved_model))
+    model.eval()
 
-FOLDER = np.load(args.Fsplit + 'Ftest.npy').tolist()
-nb_dates = 19
+    # ——— Preparar carpeta de salidas ———
+    save_folder = 'PREDICTIONS'
+    if os.path.exists(save_folder):
+        shutil.rmtree(save_folder)
+    os.mkdir(save_folder)
 
-save_folder = 'PREDICTIONS' #where to save the testing predictions
-if os.path.exists(save_folder):
-    shutil.rmtree(save_folder)
-os.mkdir(save_folder)
+    # ——— Inferencia ———
+    for idx, sid in enumerate(Ftest, 1):
+        # Localizar antes y después
+        p0 = glob.glob(os.path.join(args.data_folder, 'before', f'{sid}_*.tif'))[0]
+        p1 = glob.glob(os.path.join(args.data_folder, 'after',  f'{sid}_*.tif'))[0]
 
+        im0 = io.imread(p0)  # (H, W, 4)
+        im1 = io.imread(p1)
+        seq = np.stack([im0, im1], axis=0)              # (2, H, W, 4)
+        seq = np.transpose(seq, (0, 3, 1, 2))           # (2, 4, H, W)
+        imgs = np.expand_dims(seq, 1)                   # (2, 1, 4, H, W)
 
-cnt = 1
-for c in range(0, len(FOLDER)):
+        pred, prob = sliding_window(imgs, args.patch_size, args.step)
 
-    fold = FOLDER[c]
+        # Guardar TIFFs
+        io.imsave(os.path.join(save_folder, f'{sid}_PRED.tif'),
+                  pred.astype(np.uint8))
+        io.imsave(os.path.join(save_folder, f'{sid}_PROB.tif'),
+                  prob.astype(np.float32))
 
-    all_tifs = glob.glob(fold + '/images/*.tif*')
-    years = []
-    for j in range(len(all_tifs)):
-        ff = all_tifs[j].find('monthly_')
-        years.append(all_tifs[j][ff+8:ff+12] + all_tifs[j][ff+13:ff+15])
-    ind = np.argsort(years)
-    sort_tifs = [all_tifs[i] for i in ind]  #<------
+        print(f"{idx}/{len(Ftest)}  [{sid}] → guardado en {save_folder}")
 
-
-    img = []
-    for nd in range(0, nb_dates-1, 2):
-        im = io.imread(sort_tifs[nd])
-        img.append(im)
-    img.append( io.imread(sort_tifs[-1]) )
-
-    img = np.asarray(img) #(19,1024,1024,4)
-    img = np.transpose(img, (0,3,1,2))
-    imgs = np.expand_dims(img, 1)
-    pred, prob = sliding_window(imgs, patch_size, step)
-    prob = np.transpose(prob, (2,0,1))
-    io.imsave('./' +save_folder+ '/mL_PRED_' + fold[36:] + '.tif', pred)
-    io.imsave('./' +save_folder+ '/mL_PROB_' + fold[36:] + '.tif', prob)
-    print(cnt, '/', len(FOLDER), 'predictions saved')
-    cnt = cnt + 1
+if __name__ == '__main__':
+    main()
