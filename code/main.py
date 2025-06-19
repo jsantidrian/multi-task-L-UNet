@@ -39,9 +39,15 @@ parser.add_argument('--nb_dates', type=int, default=2,
     help='número de fechas (always 2: before & after)')
 parser.add_argument('--epochs',   type=int, default=100,
     help='Número de épocas de entrenamiento')
-parser.add_argument('--save_folder', type=str, default='models',
-    help='Directorio donde guardar checkpoints y progress.txt')
+#parser.add_argument('--save_folder', type=str, default='models',
+#    help='Directorio donde guardar checkpoints y progress.txt')
+parser.add_argument('--base_save_dir', type=str,
+    default='/content/drive/MyDrive/U/14 semestre/Tesis MDS-DIM/Modelos/L-Unet',
+    help='Directorio base en Drive donde crear la carpeta del experimento')
+parser.add_argument('--experiment_name', type=str, required=True,
+    help='Nombre de la subcarpeta para este experimento (p.ej. run1_bs4_lr1e-4)')
 args = parser.parse_args()
+
 
 
 #train_areas = np.load(args.Fsplit + 'Ftrain.npy').tolist()
@@ -102,7 +108,7 @@ change_dataset_val = custom.MyDataset(
 patch_size = args.patch_size
 nb_dates = args.nb_dates
 epochs = args.epochs
-save_folder = args.save_folder
+#save_folder = args.save_folder
 
 #change_dataset = custom.MyDataset(
 #     data_folder=data_root,
@@ -149,9 +155,11 @@ criterion_diff=tools.to_cuda(nn.CrossEntropyLoss(tools.to_cuda(diff_tensor)))
 
 confusion_matrix = tnt.meter.ConfusionMeter(2, normalized=True)
 
+save_folder = os.path.join(args.base_save_dir, args.experiment_name)
+
 if os.path.exists(save_folder):
     shutil.rmtree(save_folder)
-os.mkdir(save_folder)
+os.mkdir(save_folder, exist_ok = True)
 
 ff = open(os.path.join(save_folder, 'progress.txt'), 'w')
 
@@ -261,4 +269,7 @@ for epoch in range(1, epochs+1):
     )
 
     # 8) Guardar modelo
-    torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
+    #torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
+    # al final de cada época
+    torch.save(model.state_dict(), 
+               os.path.join(save_folder, f"{args.experiment_name}_epoch{epoch:02d}.pt"))
