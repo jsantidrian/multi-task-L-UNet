@@ -157,11 +157,21 @@ confusion_matrix = tnt.meter.ConfusionMeter(2, normalized=True)
 
 save_folder = os.path.join(args.base_save_dir, args.experiment_name)
 
+#if os.path.exists(save_folder):
+#    shutil.rmtree(save_folder)
+#os.mkdir(save_folder)
+
+#ff = open(os.path.join(save_folder, 'progress.txt'), 'w')
+
 if os.path.exists(save_folder):
     shutil.rmtree(save_folder)
-os.mkdir(save_folder)
+os.makedirs(save_folder, exist_ok=True)
 
-ff = open(os.path.join(save_folder, 'progress.txt'), 'w')
+# Abrir progress.txt en modo line‐buffered (buffering=1)
+progress_path = os.path.join(save_folder, 'progress.txt')
+ff = open(progress_path, 'w', buffering=1)
+# (opcional) cabecera CSV
+ff.write('epoch,train_acc,val_acc,train_loss,val_loss,prec,rec,f1,iou\n')
 
 for epoch in range(1, epochs+1):
     model.train()
@@ -261,12 +271,21 @@ for epoch in range(1, epochs+1):
     confusion_matrix.reset()
 
     # 7) Guardar resultados con las 4 métricas nuevas
+    #tools.write_results(
+    #    ff, save_folder, epoch,
+    #    train_acc, val_acc,
+    #    np.mean(train_losses), np.mean(val_losses),
+    #    prec, rec, f1, iou
+    #)
+
     tools.write_results(
-        ff, save_folder, epoch,
-        train_acc, val_acc,
-        np.mean(train_losses), np.mean(val_losses),
-        prec, rec, f1, iou
+    ff, save_folder, epoch,
+    train_acc, val_acc,
+    np.mean(train_losses), np.mean(val_losses),
+    prec, rec, f1, iou
     )
+    # forzar flush para que el archivo se actualice al instante
+    ff.flush()
 
     # 8) Guardar modelo
     #torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
@@ -281,3 +300,8 @@ for epoch in range(1, epochs+1):
             model.state_dict(),
             os.path.join(save_folder, checkpoint_name)
         )
+
++  # fin del for epoch
++
++# Cerrar el archivo para vaciar cualquier buffer remanente
++ff.close()
