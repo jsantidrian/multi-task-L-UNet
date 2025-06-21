@@ -301,7 +301,7 @@ for epoch in range(1, epochs+1):
             os.path.join(save_folder, checkpoint_name)
         )
 
-+  # fin del for epoch
-+
-+# Cerrar el archivo para vaciar cualquier buffer remanente
-+ff.close()
+# fin del for epoch
+
+# Cerrar el archivo para vaciar cualquier buffer remanente
+ff.close()
