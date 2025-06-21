@@ -271,8 +271,8 @@ for epoch in range(1, epochs+1):
     # 8) Guardar modelo
     #torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
     # al final de cada época
-    torch.save(model.state_dict(), 
-               os.path.join(save_folder, f"{args.experiment_name}_epoch{epoch:02d}.pt"))
+    #torch.save(model.state_dict(), 
+    #           os.path.join(save_folder, f"{args.experiment_name}_epoch{epoch:02d}.pt"))
     
     # Guardar modelo cada 1000 épocas (y también al final del entrenamiento)
     if epoch % 1000 == 0 or epoch == args.epochs:
