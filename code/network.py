@@ -118,21 +118,25 @@ class U_Net(nn.Module):
         self.Up_conv5 = conv_block(ch_in=256, ch_out=128)
         self.Up5_segm = up_conv(ch_in=256,ch_out=128)
         self.Up_conv5_segm = conv_block(ch_in=256, ch_out=128)
+	self.drop5_segm   = nn.Dropout2d(0.5)
 
         self.Up4 = up_conv(ch_in=128,ch_out=64)
         self.Up_conv4 = conv_block(ch_in=128, ch_out=64)
         self.Up4_segm = up_conv(ch_in=128,ch_out=64)
         self.Up_conv4_segm = conv_block(ch_in=128, ch_out=64)
+	self.drop4_segm   = nn.Dropout2d(0.5)
 
         self.Up3 = up_conv(ch_in=64,ch_out=32)
         self.Up_conv3 = conv_block(ch_in=64, ch_out=32)
         self.Up3_segm = up_conv(ch_in=64,ch_out=32)
         self.Up_conv3_segm = conv_block(ch_in=64, ch_out=32)
+	self.drop3_segm   = nn.Dropout2d(0.5)
 
         self.Up2 = up_conv(ch_in=32,ch_out=16)
         self.Up_conv2 = conv_block(ch_in=32, ch_out=16)
         self.Up2_segm = up_conv(ch_in=32,ch_out=16)
         self.Up_conv2_segm = conv_block(ch_in=32, ch_out=16)
+	self.drop2_segm   = nn.Dropout2d(0.5)
 
         self.Conv_1x1 = nn.Conv2d(16,output_ch,kernel_size=1,stride=1,padding=0)
         self.Conv_1x1_segm = nn.Conv2d(16,output_ch,kernel_size=1,stride=1,padding=0)
@@ -187,6 +191,7 @@ class U_Net(nn.Module):
         d5 = self.Up5_segm(s5)
         d5 = torch.cat((d5,s4),dim=1)
         d5 = self.Up_conv5_segm(d5)
+	d5 = self.drop5_segm(d5)
 
         d4 = self.Up4_segm(d5)
         d4 = torch.cat((d4,s3),dim=1)
