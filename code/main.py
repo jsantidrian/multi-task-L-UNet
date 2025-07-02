@@ -80,7 +80,7 @@ ids_after  = { os.path.basename(p).split('_')[0] for p in after_paths }
 ids_mask   = { os.path.basename(p).split('_')[0] for p in mask_paths }
 
 # 3) Tomamos la intersección: sólo los IDs que están en las 3 carpetas
-#common_ids = sorted(ids_before & ids_after & ids_mask)
+common_ids = sorted(ids_before & ids_after & ids_mask)
 #site_ids = [os.path.splitext(os.path.basename(p))[0] for p in before_list]
 
 # Barajamos y partimos en 40/10/10
