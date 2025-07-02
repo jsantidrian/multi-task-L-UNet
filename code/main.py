@@ -155,6 +155,9 @@ criterion_diff=tools.to_cuda(nn.CrossEntropyLoss(tools.to_cuda(diff_tensor)))
 
 confusion_matrix = tnt.meter.ConfusionMeter(2, normalized=True)
 
+# al inicio, tras parser y antes de crear save_folder
+history_list = []
+
 save_folder = os.path.join(args.base_save_dir, args.experiment_name)
 
 #if os.path.exists(save_folder):
@@ -287,6 +290,19 @@ for epoch in range(1, epochs+1):
     # forzar flush para que el archivo se actualice al instante
     ff.flush()
 
+    history_list.append({
+        'epoch':       epoch,
+        'train_acc':   train_acc,
+        'val_acc':     val_acc,
+        'train_loss':  np.mean(train_losses),
+        'val_loss':    np.mean(val_losses),
+        'prec':        prec,
+        'rec':         rec,
+        'f1':          f1,
+        'iou':         iou
+    })
+
+    
     # 8) Guardar modelo
     #torch.save(model.state_dict(), f'./{save_folder}/model_{epoch}.pt')
     # al final de cada época
@@ -302,6 +318,12 @@ for epoch in range(1, epochs+1):
         )
 
 # fin del for epoch
+
+import pandas as pd
+# tras cerrar bucle de épocas, antes de ff.close():
+history_df = pd.DataFrame(history_list)
+history_df.to_excel(os.path.join(save_folder, "history.xlsx"), index=False)
+# (o .to_csv(…, index=False) si prefieres CSV)
 
 # Cerrar el archivo para vaciar cualquier buffer remanente
 ff.close()
