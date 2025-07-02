@@ -137,7 +137,8 @@ model = tools.to_cuda(network.U_Net(
 ))
 
 base_lr=0.0001
-optimizer = optim.Adam(model.parameters(), lr=base_lr)
+#optimizer = optim.Adam(model.parameters(), lr=base_lr)
+optimizer = optim.Adam(model.parameters(), lr=base_lr, weight_decay=1e-4)
 weight_tensor=torch.FloatTensor(2)
 weight_tensor[0]= 0.05
 weight_tensor[1]= 0.95
