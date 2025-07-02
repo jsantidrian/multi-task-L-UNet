@@ -17,6 +17,8 @@ import shutil
 import argparse
 from sklearn.metrics import precision_score, recall_score, f1_score, jaccard_score
 import random
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument('--Fsplit', type=str, default='/home/mariapap/DATA/SPACENET7/EXPS/__TRY_DIFFERENT__/Fsplit/',
@@ -78,18 +80,41 @@ ids_after  = { os.path.basename(p).split('_')[0] for p in after_paths }
 ids_mask   = { os.path.basename(p).split('_')[0] for p in mask_paths }
 
 # 3) Tomamos la intersección: sólo los IDs que están en las 3 carpetas
-common_ids = sorted(ids_before & ids_after & ids_mask)
+#common_ids = sorted(ids_before & ids_after & ids_mask)
 #site_ids = [os.path.splitext(os.path.basename(p))[0] for p in before_list]
 
 # Barajamos y partimos en 40/10/10
 # random.shuffle(site_ids)
-random.shuffle(common_ids)
-Ftrain = common_ids[:40]
-Fval   = common_ids[40:50]
-Ftest  = common_ids[50:60]   # si lo usas en inf.py
+#random.shuffle(common_ids)
+#Ftrain = common_ids[:40]
+#Fval   = common_ids[40:50]
+#Ftest  = common_ids[50:60]   # si lo usas en inf.py
 #Ftrain = site_ids[:40]
 #Fval   = site_ids[40:50]
 #Ftest  = site_ids[50:60]   # (para inf.py si lo necesitas)
+
+# ——— FILTRADO POR PIXELES Y STRATIFIED SPLIT 70/30 ———
+perm_path = os.path.join(args.data_folder, 'permisos.xlsx')
+dfp = pd.read_excel(perm_path, dtype={'id_permiso': str})
+# Filtrar por número de píxeles entre 20 y 90
+dfp = dfp[(dfp['pixeles'] >= 20) & (dfp['pixeles'] <= 90)].reset_index(drop=True)
+
+# Sólo conservar IDs que realmente están en before/after/mask
+dfp = dfp[dfp['id_permiso'].isin(common_ids)].reset_index(drop=True)
+
+# Crear estratos en 5 cuantiles
+dfp['stratum'] = pd.qcut(dfp['pixeles'], q=5, labels=False)
+
+# StratifiedShuffleSplit 70% train / 30% val
+sss = StratifiedShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
+train_idx, val_idx = next(sss.split(np.zeros(len(dfp)), dfp['stratum']))
+
+# Listas finales de IDs para train y val
+Ftrain = dfp.loc[train_idx, 'id_permiso'].tolist()
+Fval   = dfp.loc[val_idx,   'id_permiso'].tolist()
+
+# Si necesitas un Ftest separado, podrías reservar un trozo de val_idx o crearlo a mano
+Ftest = []  # opcional, si no lo usas en este script
 
 # Creamos los datasets con tu clase adaptada
 change_dataset = custom.MyDataset(
