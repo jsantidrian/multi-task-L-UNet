@@ -196,14 +196,17 @@ class U_Net(nn.Module):
         d4 = self.Up4_segm(d5)
         d4 = torch.cat((d4,s3),dim=1)
         d4 = self.Up_conv4_segm(d4)
+	d4 = self.drop4_segm(d4)
 
         d3 = self.Up3_segm(d4)
         d3 = torch.cat((d3,s2),dim=1)
         d3 = self.Up_conv3_segm(d3)
+	d3 = self.drop3_segm(d3)
 
         d2 = self.Up2_segm(d3)
         d2 = torch.cat((d2,s1),dim=1)
         d2 = self.Up_conv2_segm(d2)
+	d2 = self.drop2_segm(d2)
 
         d1 = self.Conv_1x1_segm(d2)
 
