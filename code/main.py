@@ -48,6 +48,8 @@ parser.add_argument('--base_save_dir', type=str,
     help='Directorio base en Drive donde crear la carpeta del experimento')
 parser.add_argument('--experiment_name', type=str, required=True,
     help='Nombre de la subcarpeta para este experimento (p.ej. run1_bs4_lr1e-4)')
+parser.add_argument('--resume', type=str, default=None,
+    help='path to a .pt checkpoint in save_folder to resume from')
 args = parser.parse_args()
 
 
@@ -186,6 +188,13 @@ history_list = []
 
 save_folder = os.path.join(args.base_save_dir, args.experiment_name)
 
+start_epoch = 1
+if args.resume:
+    ckpt = torch.load(args.resume)
+    model.load_state_dict(ckpt['model_state_dict'])
+    optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+    start_epoch = ckpt['epoch'] + 1
+    print(f"=> Resuming from epoch {start_epoch}")
 #if os.path.exists(save_folder):
 #    shutil.rmtree(save_folder)
 #os.mkdir(save_folder)
@@ -202,7 +211,8 @@ ff = open(progress_path, 'w', buffering=1)
 # (opcional) cabecera CSV
 ff.write('epoch,train_acc,val_acc,train_loss,val_loss,prec,rec,f1,iou\n')
 
-for epoch in range(1, epochs+1):
+#for epoch in range(1, epochs+1):
+for epoch in range(start_epoch, epochs+1):
     model.train()
     train_losses = []
     confusion_matrix.reset()
@@ -338,10 +348,15 @@ for epoch in range(1, epochs+1):
     # Guardar modelo cada 1000 épocas (y también al final del entrenamiento)
     if epoch % 1000 == 0 or epoch == args.epochs:
         checkpoint_name = f"{args.experiment_name}_epoch{epoch:04d}.pt"
-        torch.save(
-            model.state_dict(),
-            os.path.join(save_folder, checkpoint_name)
-        )
+        #torch.save(
+        #    model.state_dict(),
+        #    os.path.join(save_folder, checkpoint_name)
+        #)
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }, os.path.join(save_folder, checkpoint_name))
 
 # fin del for epoch
 
